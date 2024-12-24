@@ -1,0 +1,21 @@
+# System clock (100 MHz)
+NET "clk" LOC = "V10";       # Modify according to your FPGA's system clock pin
+NET "rst" LOC = "T10";
+NET "load" LOC = "T9";
+NET "switch<0>" LOC = "N8";
+NET "switch<1>" LOC = "U8";
+NET "switch<2>" LOC = "V8";
+NET "switch<3>" LOC = "T5";
+# UART RX data line (Serial input)
+#NET "rx" LOC = "N17";       # Modify according to your chosen UART RX pin
+NET "tx" LOC = "N18";
+#NET "busy" LOC = "T11";
+
+NET "state<0>" LOC = "R11";
+NET "state<1>" LOC = "T11";
+NET "res<0>" LOC = "U16";
+NET "res<1>" LOC = "V16";
+NET "res<2>" LOC = "U15";
+NET "res<3>" LOC = "V15";
+NET "res<4>" LOC = "M11";
+NET "res<5>" LOC = "N11";
