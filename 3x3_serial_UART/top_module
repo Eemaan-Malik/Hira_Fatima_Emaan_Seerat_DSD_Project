@@ -1,0 +1,192 @@
+`timescale 1ns / 1ps
+
+module top_module (
+    input clk,
+    input rst,
+	 //input load,
+	 input [2:0] switch,
+    input rx,           // UART receive pin
+    output tx,           // UART transmit pin
+	 output rx_valid,
+	 output reg [7:0] test,
+	 output receiving,
+	 output [3:0] bit_index,
+	 output [5:0] bit_counter  // Output for the bit counter 'i'
+);
+
+wire [7:0] rx_data;
+//wire rx_valid;
+reg [26:0] matA, matB;
+reg [7:0] matR [0:6];
+wire [53:0] result;
+wire [1:0] state;
+reg send_data;
+reg [63:0] data_buffer; // 54-bit register to store incoming data
+integer i;
+wire busy;
+reg load;
+parameter S3 = 2'd3; // Store state
+
+// UART Receive
+UART_Rx uart_rx (
+    .clk(clk),
+    .rst(rst),
+    .rx(rx),
+    .rx_data(rx_data),
+    .rx_ready(rx_valid)
+);
+
+// Matrix Multiplication
+Matrix_Multiply uut (
+    .clk(clk),
+    .rst(rst),
+    .matrixA(matA),
+    .matrixB(matB),
+    .load(load),
+    .result(result),
+    .state(state)
+);
+
+// UART Transmit
+UART_Tx uart_tx (
+    .clk(clk),
+    .rst(rst),
+    .data_in(result),
+    .send(send_data),
+    .tx(tx),
+    .busy(busy)
+);
+
+/*integer m;	
+always @ (posedge clk) begin
+if (rst) begin
+	for (m = 0; m < 6; m = m + 1) begin
+		matR[m] <= 0; 
+	end
+end else begin
+if (i>=53) begin
+	for (m = 0; m < 6; m = m + 1) begin
+		matR[m] <= data_buffer[m * 8 +: 8]; 
+		//matR[m] <= 8'd7;
+	end
+	end
+	else begin
+	for (m = 0; m < 6; m = m + 1) begin
+		matR[m] <= matR[m]; 
+	end
+	end
+	end
+end
+
+always @ (*) begin
+	test = matR[switch];
+end
+*/
+
+reg rx_ready_d;  // Delayed version of rx_ready
+
+always @(posedge clk or posedge rst) begin
+    if (rst) begin
+        rx_ready_d <= 0;
+    end else begin
+        rx_ready_d <= rx_valid;
+    end
+end
+
+wire rx_valid_edge = rx_valid && !rx_ready_d;  // Detect rising edge of rx_ready
+
+
+always @(posedge clk or posedge rst) begin
+    if (rst) begin
+        matA <= 0;
+        matB <= 0;
+        send_data <= 0;
+        i <= 0;
+        data_buffer <= 0;
+		  //load <= 0;
+    end else begin
+	 if (i == 8) begin
+                matA <= data_buffer[26:0];    // First 27 bits
+                matB <= data_buffer[58:32];  // Next 27 bits
+                i <= 0;                      // Reset index for next transaction
+					 load <= 1;
+            end
+        if (rx_valid_edge) begin
+		  
+		  // Write the received byte into the correct position in the buffer
+            data_buffer[(i * 8) +: 8] <= rx_data;  // Dynamic bit slicing
+
+            // Increment the byte counter (i) for the next byte
+            i <= i + 1;
+
+            
+		  
+		  //data_buffer[i +: 8] <= rx_data; // Update correct part of buffer
+		  /*case (i)
+        0: data_buffer[7:0]  <= rx_data;    // Least significant byte
+        8: data_buffer[15:8] <= rx_data;   // Second byte
+        16: data_buffer[23:16]<= rx_data;  // Third byte
+        24: data_buffer[31:24]<= rx_data;  // Fourth byte
+        32: data_buffer[39:32]<= rx_data;  // Fifth byte
+        40: data_buffer[47:40]<= rx_data;  // Sixth byte
+        48: data_buffer[55:48]<= rx_data;  // Most significant bits (partial byte for 54-bit buffer)
+        56: data_buffer[63:56]<= rx_data;
+    endcase*/
+            // Shift in the received byte into the appropriate position in the buffer
+            //data_buffer <= {rx_data, data_buffer[63:8]};
+            //i <= i + 8; // Increment by 8 bits for each received byte
+
+            /*if (i >= 60) begin
+                matA <= data_buffer[26:0]; // Assign the first 27 bits to matA
+                matB <= data_buffer[58:32]; // Assign the next 27 bits to matB
+					//load <= 1;
+					//i <= 0;
+				end
+				else begin
+		  
+		  matA <=matA;
+		  matB<=matB;
+		  end*/
+        end /*else begin
+		  data_buffer <= data_buffer;
+		  matA <=matA;
+		  matB<=matB;
+		  end*/
+
+        if (state == S3 && !busy) begin
+            send_data <= 1;  // Send the result back to the laptop
+				load <= 0;
+        end else begin
+            send_data <= 0;
+        end
+    end
+end
+
+// Output the value of 'i' (bit counter) as a 6-bit signal
+assign bit_counter = i[5:0];  // Output the lower 6 bits of 'i'
+
+always @(*) begin
+    case (switch)
+       /*3'd0: test = data_buffer[7:0];    // Least significant byte
+        3'd1: test = data_buffer[15:8];   // Second byte
+        3'd2: test = data_buffer[23:16];  // Third byte
+        3'd3: test = data_buffer[31:24];  // Fourth byte
+        3'd4: test = data_buffer[39:32];  // Fifth byte
+        3'd5: test = data_buffer[47:40];  // Sixth byte
+        3'd6: test = data_buffer[55:48];  // Most significant bits (partial byte for 54-bit buffer)
+        3'd7: test = data_buffer[63:56];*/
+		  3'd0: test = matA[7:0];    // Least significant byte
+        3'd1: test = matA[15:8];   // Second byte
+        3'd2: test = matA[23:16];  // Third byte
+        3'd3: test = matA[26:24];  // Fourth byte
+        3'd4: test = matB[7:0];  // Fifth byte
+        3'd5: test = matB[15:8];  // Sixth byte
+        3'd6: test = matB[23:16];  // Most significant bits (partial byte for 54-bit buffer)
+        3'd7: test = matB[26:24];
+
+		  default: test = 8'h00;
+    endcase
+end
+
+
+endmodule
